@@ -1,8 +1,11 @@
 # ✈️ 6-DOF Flight Dynamics Simulator 
+## Intro
 
-## Overview
+The 6-DOF Flight Dynamics Simulator is a real-time simulation framework designed to model and visualize the complete motion of an aircraft in three-dimensional space. By capturing all six degrees of freedom—three translational (surge: forward/back, sway: left/right, heave: up/down) and three rotational (roll: tilt about nose-to-tail axis, pitch: nose up/down, yaw: nose left/right)—the simulator provides an accurate and immersive representation of flight dynamics. 
 
-This document describes the system architecture for a real-time 6-degrees-of-freedom (6-DOF) flight simulator designed for aircraft simulation. The system employs a multi-threaded architecture to separate physics computation from user interface rendering, ensuring smooth performance and accurate simulation.
+The simulator emphasizes deterministic timing and real-time performance: the physics engine runs at 200Hz to capture rapid dynamic changes, while the user interface operates at 60Hz for fluid visualization.
+
+This document below describes the system architecture
 
 ## Architecture Diagram
 
