@@ -1,10 +1,13 @@
 #include <cmath>
 #include <array>
 
-// Clamp value between min and max
-inline double clamp(double x, double a, double b)
+inline double clamp(double x, double min, double max)
 {
-    return std::fmax(a, std::fmin(b, x));
+    if (x < min)
+        return min;
+    if (x > max)
+        return max;
+    return x;
 }
 
 // Convert Euler angles to rotation matrix
@@ -32,16 +35,32 @@ inline std::array<double, 9> R_ib_from_euler(double phi, double th, double psi)
         cphi * sth * spsi - sphi * cpsi,
         cphi * cth};
 }
-
-// Convert body rates (p,q,r) to Euler angle rates (φ̇,θ̇,ψ̇)
-inline void euler_rates(double phi, double th, double p, double q, double r,
-                        double &dphi, double &dth, double &dpsi)
+struct EulerRates
 {
+    double dphi; // Roll rate (rad/s)
+    double dth;  // Pitch rate (rad/s)
+    double dpsi; // Yaw rate (rad/s)
+};
+
+// Convert body rates (p, q, r) to Euler angle rates (φ̇, θ̇, ψ̇)
+// phi: roll angle (rad)
+// th: pitch angle (rad)
+// p, q, r: body angular rates (rad/s)
+// Returns: EulerRates struct containing dphi, dth, dpsi
+inline EulerRates euler_rates(double phi, double th, double p, double q, double r)
+{
+    // Precompute trigonometric values for efficiency
     double cphi = std::cos(phi), sphi = std::sin(phi);
     double cth = std::cos(th), sth = std::sin(th);
 
-    // These equations relate body rates to Euler rates
-    dphi = p + std::tan(th) * (q * sphi + r * cphi);
-    dth = q * cphi - r * sphi;
-    dpsi = (q * sphi + r * cphi) / cth;
+    // Compute Euler angle rates using standard transformation
+    // dphi: roll rate
+    // dth: pitch rate
+    // dpsi: yaw rate
+    EulerRates rates;
+    rates.dphi = p + std::tan(th) * (q * sphi + r * cphi);
+    rates.dth = q * cphi - r * sphi;
+    rates.dpsi = (q * sphi + r * cphi) / cth;
+
+    return rates;
 }
