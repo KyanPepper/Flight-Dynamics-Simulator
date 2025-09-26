@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "buildMac",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "type": "shell",
+      "command": "./scripts/buildMac.sh",
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

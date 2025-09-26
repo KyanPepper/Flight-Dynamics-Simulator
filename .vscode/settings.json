@@ -1,0 +1,11 @@
+{
+  "files.associations": {
+    "deque": "cpp",
+    "string": "cpp",
+    "vector": "cpp",
+    "qapplication": "cpp",
+    "array": "cpp",
+    "cmath": "cpp"
+  },
+  "editor.formatOnSave": true
+}
