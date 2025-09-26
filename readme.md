@@ -1,7 +1,70 @@
 # ✈️ 6-DOF Flight Dynamics Simulator 
-A beginner-friendly, interview-ready C++ project that simulates a tiny aircraft's motion in 3D using essential flight-dynamics equations and renders an artificial horizon with Qt. 
 
-- Mirrors real simulator architecture (physics ↔ display separation).
+## Overview
+
+This document describes the system architecture for a real-time 6-degrees-of-freedom (6-DOF) flight simulator designed for aircraft simulation. The system employs a multi-threaded architecture to separate physics computation from user interface rendering, ensuring smooth performance and accurate simulation.
+
+## Architecture Diagram
+
+![System Architecture Diagram](./Architecture.png)
+
+*Figure 1: Complete system architecture showing the multi-threaded design with physics simulation (200Hz), shared memory layer, and UI rendering (60Hz)*
+
+
+## Key Design Principles
+
+- **Real-time Performance**: Physics simulation runs at 200Hz for accuracy, UI renders at 60Hz for smooth display
+- **Deterministic Timing**: Fixed timestep integration ensures simulation consistency
+
+## Architecture Overview
+
+The system consists of three main components:
+
+1. **Physics Thread** (200Hz) - High-frequency simulation engine
+2. **Shared Memory Layer** - Lock-free inter-thread communication
+3. **UI Thread** (60Hz) - User interface and rendering system
+
+## Component Details
+
+#### Flow Sequence:
+1. **Aircraft Parameters** - Load aircraft configuration (mass, inertia, aerodynamic coefficients)
+2. **Control Inputs** - Read pilot commands (stick, rudder, throttle)
+3. **Forces & Moments** - Calculate aerodynamic and propulsive forces using flight dynamics equations
+4. **Accelerations** - Apply Newton's laws (F=ma, τ=Iα) to determine linear and angular accelerations
+5. **Integration** - Numerical integration of accelerations to update velocities and positions
+6. **State Vector** - Store complete aircraft state [position, velocity, attitude, angular rates]
+7. **Validation** - Ensure physical constraints and detect simulation errors
+8. **Sleep** - Maintain precise 5ms timing cycle
+
+
+### Shared Memory Layer
+
+The shared memory system provides efficient, thread-safe communication between physics and UI threads without blocking operations.
+
+#### Components:
+- **SPSC Ring Buffer**: Lock-free circular buffer with 1024 state snapshots
+- **State Snapshots**: Complete aircraft state copies with timestamps
+
+
+### UI Thread (60Hz)
+
+The UI thread handles user interaction and visual rendering at standard display refresh rates (60Hz/16ms).
+#### Flow Sequence:
+1. **User Input Events** - Process keyboard, mouse, and controller inputs
+2. **Timer** - 16ms frame timing for smooth 60Hz operation
+3. **Read Latest State** - Fetch most recent aircraft state from ring buffer
+4. **Transform Coordinates** - Convert simulation coordinates to display coordinates
+5. **Render Horizon** - Draw artificial horizon and attitude indicators
+6. **Draw Elements** - Render instruments, HUD elements, and cockpit displays
+7. **Display Frame** - Present completed frame to screen
+8. **Wait Next Timer** - Synchronize to maintain consistent frame rate
+
+## Timing and Synchronization
+
+### System Clock Synchronization
+- Both threads synchronized to system high-resolution timer
+- Physics thread: 5ms intervals (200Hz)
+- UI thread: 16ms intervals (60Hz)
 
 ## 🧠 Core physics (kept simple)
 
@@ -48,42 +111,3 @@ L = K_ℓ·δ_a,  M = K_m·δ_e,  N = K_n·δ_r
 θ̇ = q cos φ - r sin φ
 ψ̇ = (q sin φ + r cos φ)/cos θ
 ```
-
-**Integration**: start with Euler (simple), upgrade to RK4 later.
-
-## 🧵 Concurrency design
-
-- **Physics thread (producer)**: fixed step (e.g., 200 Hz), integrates state, pushes to SPSC (single-producer/single-consumer) ring buffer. Never blocks (drops if full).
-- **Qt UI thread (consumer)**: ~60 Hz timer pulls latest state and renders an artificial horizon (uses roll & pitch).
-- **Main**: starts/stops threads.
-
-
-
-## 🍎 macOS setup & build  (TODO Portability)
-
-### Install tools
-```bash
-brew install cmake qt
-```
-
-### Configure & build
-```bash
-mkdir -p build && cd build
-cmake -DQt6_DIR=$(brew --prefix qt)/lib/cmake/Qt6 ..
-cmake --build . -j
-```
-
-### Run
-```bash
-./flightSim
-```
-
-
-## 🔢 Default parameters (tweak freely)
-
-- Mass m = 1200 kg, inertias Ix=1200, Iy=1500, Iz=1800 kg·m²
-- Wing S=16 m², CL0=0.2, CL_a=5.5 rad⁻¹, CD0=0.03, k=0.07
-- Moments: Kℓ=3000, Km=5000, Kn=2000
-- Air rho=1.225 kg/m³, gravity g=9.81 m/s²
-- Controls in [-1,1]
-
