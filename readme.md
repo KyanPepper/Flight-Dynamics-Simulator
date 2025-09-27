@@ -1,4 +1,4 @@
-# ✈️ 6-DOF Flight Dynamics Simulator 
+# 6-DOF Flight Dynamics Simulator 
 ## Intro
 
 > **The 6-DOF Flight Dynamics Simulator** is a simulation designed to model and visualize the complete motion of an aircraft in three-dimensional space. By capturing all **six degrees of freedom**—three translational (**surge**: forward/back, **sway**: left/right, **heave**: up/down) and three rotational (**roll**: tilt about nose-to-tail axis, **pitch**: nose up/down, **yaw**: nose left/right)—the simulator provides an accurate picture of flight dynamics.
