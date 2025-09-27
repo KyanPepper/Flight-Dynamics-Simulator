@@ -73,7 +73,6 @@ struct Deriv
     double dp, dq, dr;      // Angular accelerations
 };
 
-// The physics engine class
 class Physics
 {
 public:

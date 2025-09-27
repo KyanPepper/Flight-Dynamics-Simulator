@@ -10,6 +10,19 @@
       "command": "./scripts/buildMac.sh",
       "group": "build",
       "problemMatcher": []
+    },
+    {
+      "label": "test:buildMac",
+      "type": "shell",
+      "command": "./scripts/buildMac.sh && ./build/test_physics",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always"
+      }
     }
   ]
 }
