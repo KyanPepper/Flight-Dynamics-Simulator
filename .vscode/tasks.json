@@ -14,7 +14,7 @@
     {
       "label": "test:buildMac",
       "type": "shell",
-      "command": "./scripts/buildMac.sh && ./build/test_physics",
+      "command": "./scripts/buildMacTests.sh",
       "options": {
         "cwd": "${workspaceFolder}"
       },

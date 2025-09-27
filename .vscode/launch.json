@@ -20,6 +20,26 @@
           "ignoreFailures": true
         }
       ]
+    },
+    {
+      "name": "C++ Test Launch Mac",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/test_physics",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb",
+      "preLaunchTask": "test:buildMac",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
     }
   ]
 }
