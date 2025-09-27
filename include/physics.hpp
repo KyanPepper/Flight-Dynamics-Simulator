@@ -2,95 +2,137 @@
 #include <array>
 #include <atomic>
 
-// Aircraft parameters (constants)
-struct Params
+/**
+ * All the fixed properties of our aircraft (like weight, size, etc.)
+ * These don't change during flight
+ */
+struct AircraftParameters
 {
-    // Physical properties
-    double mass = 1200;    // Mass (kg)
-    double gravity = 9.81; // Gravity (m/s²)
-    double rho = 1.225;    // Air density (kg/m³)
+    // Basic physical properties
+    double mass = 1200.0;       // How heavy the aircraft is (kg)
+    double gravity = 9.81;      // Earth's gravity (m/s²)
+    double air_density = 1.225; // How thick the air is (kg/m³)
 
-    // Moments of inertia (resistance to rotation)
-    double Ix = 1200; // Roll inertia (kg·m²)
-    double Iy = 1500; // Pitch inertia
-    double Iz = 1800; // Yaw inertia
+    // How hard it is to rotate the aircraft around each axis
+    double roll_inertia = 1200.0;  // Resistance to rolling motion (kg·m²)
+    double pitch_inertia = 1500.0; // Resistance to pitching motion (kg·m²)
+    double yaw_inertia = 1800.0;   // Resistance to yawing motion (kg·m²)
 
-    // Aerodynamic coefficients
-    double S = 16.0;   // Wing area (m²)
-    double CL0 = 0.2;  // Lift coefficient at zero angle of attack
-    double CLa = 5.5;  // Lift slope (per radian)
-    double CD0 = 0.03; // Parasitic drag coefficient
-    double k = 0.07;   // Induced drag factor
+    // Wing and aerodynamic properties
+    double wing_area = 16.0;             // Total wing surface area (m²)
+    double base_lift_coefficient = 0.2;  // Lift when wings are level
+    double lift_slope = 5.5;             // How much lift increases with angle of attack
+    double base_drag_coefficient = 0.03; // Minimum drag (parasitic drag)
+    double induced_drag_factor = 0.07;   // Extra drag from making lift
 
-    // Control effectiveness
-    double Kl = 3000; // Aileron effectiveness (N·m per unit deflection)
-    double Km = 5000; // Elevator effectiveness
-    double Kn = 2000; // Rudder effectiveness
+    // How effective the controls are (bigger = more responsive)
+    double aileron_power = 3000.0;  // Roll control strength (N·m per unit input)
+    double elevator_power = 5000.0; // Pitch control strength (N·m per unit input)
+    double rudder_power = 2000.0;   // Yaw control strength (N·m per unit input)
 
-    double Tmax = 4000; // Maximum thrust (N)
+    double max_thrust = 4000.0; // Maximum engine thrust (N)
 };
 
-// Pilot inputs (control stick/throttle positions)
-struct Inputs
+/**
+ * What the pilot is doing with the controls right now
+ * All values are normalized: -1 to +1 for control surfaces, 0 to 1 for throttle
+ */
+struct PilotInputs
 {
-    double aileron = 0.0;   // Roll control [-1,1]
-    double elevator = 0.05; // Pitch control [-1,1]
-    double rudder = 0.0;    // Yaw control [-1,1]
-    double throttle = 0.6;  // Engine power [0,1]
+    double aileron = 0.0;   // Roll control stick position [-1 = left, +1 = right]
+    double elevator = 0.05; // Pitch control stick position [-1 = nose down, +1 = nose up]
+    double rudder = 0.0;    // Yaw pedal position [-1 = left, +1 = right]
+    double throttle = 0.6;  // Engine power setting [0 = idle, 1 = full power]
 };
 
-// Complete aircraft state at a moment in time
-struct State
+/**
+ * Complete description of where the aircraft is and what it's doing right now
+ * This is everything we need to know about the aircraft's motion
+ */
+struct AircraftState
 {
-    // Position in world (NED) coordinates (meters)
-    double N = 0, E = 0, D = 0;
+    // Where the aircraft is in the world (meters)
+    double north_position = 0.0; // Distance north of starting point
+    double east_position = 0.0;  // Distance east of starting point
+    double down_position = 0.0;  // Distance below starting point (negative = altitude)
 
-    // Velocity in body frame (m/s)
-    double u = 55; // Forward velocity (start with some speed)
-    double v = 0;  // Sideways velocity
-    double w = 0;  // Vertical velocity
+    // How fast the aircraft is moving in its own coordinate system (m/s)
+    double forward_velocity = 55.0; // Speed forward (start with some airspeed)
+    double side_velocity = 0.0;     // Speed sideways (usually small)
+    double vertical_velocity = 0.0; // Speed up/down
 
-    // Orientation (Euler angles in radians)
-    double phi = 0;   // Roll angle
-    double th = 0.03; // Pitch angle (slight climb)
-    double psi = 0;   // Yaw angle
+    // Aircraft orientation in space (radians)
+    double roll_angle = 0.0;   // Banking left/right (0 = wings level)
+    double pitch_angle = 0.03; // Nose up/down (positive = nose up, slight climb)
+    double yaw_angle = 0.0;    // Compass heading (0 = north)
 
-    // Angular rates in body frame (rad/s)
-    double p = 0; // Roll rate
-    double q = 0; // Pitch rate
-    double r = 0; // Yaw rate
+    // How fast the aircraft is rotating around its center (rad/s)
+    double roll_rate = 0.0;  // Rolling motion (around forward axis)
+    double pitch_rate = 0.0; // Pitching motion (around side axis)
+    double yaw_rate = 0.0;   // Yawing motion (around vertical axis)
 
     // Simulation time
-    double t = 0;
+    double time = 0.0;
 };
 
-// Time derivatives of all state variables
-struct Deriv
+/**
+ * All the rates of change of the aircraft state
+ * These are the "derivatives" - they tell us how fast everything is changing
+ */
+struct StateDerivatives
 {
-    double dN, dE, dD;      // Position derivatives (velocity)
-    double du, dv, dw;      // Acceleration
-    double dphi, dth, dpsi; // Euler angle rates
-    double dp, dq, dr;      // Angular accelerations
+    // How fast position is changing (this is just velocity)
+    double north_velocity = 0.0;
+    double east_velocity = 0.0;
+    double down_velocity = 0.0;
+
+    // How fast velocity is changing (this is acceleration)
+    double forward_acceleration = 0.0;
+    double side_acceleration = 0.0;
+    double vertical_acceleration = 0.0;
+
+    // How fast orientation angles are changing
+    double roll_rate = 0.0;
+    double pitch_rate = 0.0;
+    double yaw_rate = 0.0;
+
+    // How fast rotation rates are changing (angular acceleration)
+    double roll_acceleration = 0.0;
+    double pitch_acceleration = 0.0;
+    double yaw_acceleration = 0.0;
+
+    // Default constructor zeros everything
+    StateDerivatives() = default;
 };
 
-class Physics
+/**
+ * Main physics calculator for aircraft simulation
+ * This class knows how to calculate all the forces and update the aircraft state
+ */
+class AircraftPhysics
 {
-public:
-    Physics() = default;
-
-    // Set aircraft parameters
-    void setParams(const Params &P_) { P = P_; }
-
-    // Set control inputs
-    void setInputs(const Inputs &U_) { U = U_; }
-
-    // Calculate derivatives (right-hand side of differential equations)
-    Deriv rhs(const State &s) const;
-
-    // Integrate one time step using Euler method
-    void step(State &s, double dt) const;
-
 private:
-    Params P; // Aircraft parameters
-    Inputs U; // Control inputs
+    AircraftParameters params; // Aircraft specifications
+    PilotInputs inputs;        // Current control inputs
+
+public:
+    AircraftPhysics() = default;
+
+    // Set the aircraft's physical properties
+    void setAircraftParameters(const AircraftParameters &new_params)
+    {
+        params = new_params;
+    }
+
+    // Update what the pilot is doing with the controls
+    void setPilotInputs(const PilotInputs &new_inputs)
+    {
+        inputs = new_inputs;
+    }
+
+    // Calculate how fast everything is changing right now
+    StateDerivatives calculateDerivatives(const AircraftState &current_state) const;
+
+    // Move the simulation forward by one small time step
+    AircraftState integrateOneStep(const AircraftState &current_state, double time_step) const;
 };

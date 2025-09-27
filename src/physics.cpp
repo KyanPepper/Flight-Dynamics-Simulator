@@ -1,98 +1,123 @@
-
 #include "physics.hpp"
-#include "math.hpp"
-#include <cmath>
-#include <algorithm>
+#include "utils.hpp"
 
-// This calculates all the derivatives (rates of change)
-Deriv Physics::rhs(const State &s) const
+StateDerivatives AircraftPhysics::calculateDerivatives(const AircraftState &state) const
 {
-    Deriv k{}; // Initialize all derivatives to zero
+    StateDerivatives derivatives;
 
-    // === Step 1: Get rotation matrix ===
-    // This converts vectors from body frame to world frame
-    auto R = R_ib_from_euler(s.phi, s.th, s.psi);
+    // Step 1: Create rotation matrix to convert between aircraft and world coordinates
+    RotationMatrix rotation(state.roll_angle, state.pitch_angle, state.yaw_angle);
 
-    // === Step 2: Calculate position derivatives ===
-    // Velocity in world frame = Rotation * velocity in body frame
-    k.dN = R[0] * s.u + R[1] * s.v + R[2] * s.w; // North velocity
-    k.dE = R[3] * s.u + R[4] * s.v + R[5] * s.w; // East velocity
-    k.dD = R[6] * s.u + R[7] * s.v + R[8] * s.w; // Down velocity
+    // Step 2: Calculate how fast position is changing (velocity in world frame)
+    // Transform aircraft velocity to world velocity using rotation matrix
+    derivatives.north_velocity = rotation(0, 0) * state.forward_velocity +
+                                 rotation(0, 1) * state.side_velocity +
+                                 rotation(0, 2) * state.vertical_velocity;
 
-    // === Step 3: Calculate airspeed and angle of attack ===
-    double V = std::sqrt(s.u * s.u + s.v * s.v + s.w * s.w) + 1e-6; // Total velocity
-    double alpha = std::atan2(s.w, s.u);                            // Angle of attack
-    double qdyn = 0.5 * P.rho * V * V;                              // Dynamic pressure
+    derivatives.east_velocity = rotation(1, 0) * state.forward_velocity +
+                                rotation(1, 1) * state.side_velocity +
+                                rotation(1, 2) * state.vertical_velocity;
 
-    // === Step 4: Calculate aerodynamic forces ===
-    double CL = P.CL0 + P.CLa * alpha; // Lift coefficient
-    double L = CL * qdyn * P.S;        // Lift force
-    double CD = P.CD0 + P.k * CL * CL; // Drag coefficient
-    double D = CD * qdyn * P.S;        // Drag force
+    derivatives.down_velocity = rotation(2, 0) * state.forward_velocity +
+                                rotation(2, 1) * state.side_velocity +
+                                rotation(2, 2) * state.vertical_velocity;
 
-    // === Step 5: Calculate thrust ===
-    double T = P.Tmax * std::clamp(U.throttle, 0.0, 1.0);
+    // Step 3: Calculate airspeed and angle of attack
+    double total_airspeed = std::sqrt(state.forward_velocity * state.forward_velocity +
+                                      state.side_velocity * state.side_velocity +
+                                      state.vertical_velocity * state.vertical_velocity) +
+                            1e-6;
 
-    // === Step 6: Transform weight to body frame ===
-    // Weight acts downward in world frame [0, 0, mg]
-    // We need it in body frame for our equations
-    double Wx = R[2] * P.mass * P.gravity; // Weight component along body X
-    double Wy = R[5] * P.mass * P.gravity; // Weight component along body Y
-    double Wz = R[8] * P.mass * P.gravity; // Weight component along body Z
+    double angle_of_attack = std::atan2(state.vertical_velocity, state.forward_velocity);
+    double dynamic_pressure = 0.5 * params.air_density * total_airspeed * total_airspeed;
 
-    // === Step 7: Calculate accelerations (F = ma) ===
-    // Including Coriolis terms from rotating reference frame
-    k.du = (T - D + Wx) / P.mass - (s.q * s.w - s.r * s.v);
-    k.dv = (0.0 + Wy) / P.mass - (s.r * s.u - s.p * s.w);
-    k.dw = (-L + Wz) / P.mass - (s.p * s.v - s.q * s.u);
+    // Step 4: Calculate aerodynamic forces
+    double lift_coefficient = params.base_lift_coefficient + params.lift_slope * angle_of_attack;
+    double lift_force = lift_coefficient * dynamic_pressure * params.wing_area;
 
-    // === Step 8: Calculate control moments ===
-    double Lm = P.Kl * std::clamp(U.aileron, -1.0, 1.0);  // Roll moment
-    double Mm = P.Km * std::clamp(U.elevator, -1.0, 1.0); // Pitch moment
-    double Nm = P.Kn * std::clamp(U.rudder, -1.0, 1.0);   // Yaw moment
+    double drag_coefficient = params.base_drag_coefficient +
+                              params.induced_drag_factor * lift_coefficient * lift_coefficient;
+    double drag_force = drag_coefficient * dynamic_pressure * params.wing_area;
 
-    // === Step 9: Calculate angular accelerations ===
-    // Using Euler's equations for rigid body rotation
-    k.dp = (Lm - (P.Iz - P.Iy) * s.q * s.r) / P.Ix;
-    k.dq = (Mm - (P.Ix - P.Iz) * s.p * s.r) / P.Iy;
-    k.dr = (Nm - (P.Iy - P.Ix) * s.p * s.q) / P.Iz;
+    // Step 5: Calculate engine thrust
+    double thrust_force = params.max_thrust * clamp(inputs.throttle, 0.0, 1.0);
 
-    // === Step 10: Calculate Euler angle rates ===
-    auto er = euler_rates(s.phi, s.th, s.p, s.q, s.r);
+    // Step 6: Calculate weight components in aircraft body frame
+    // Weight always points down in world frame, but we need it in aircraft frame
+    double weight_forward = rotation(0, 2) * params.mass * params.gravity;
+    double weight_side = rotation(1, 2) * params.mass * params.gravity;
+    double weight_vertical = rotation(2, 2) * params.mass * params.gravity;
 
-    k.dphi = er.dphi;
-    k.dth = er.dth;
-    k.dpsi = er.dpsi;
+    // Step 7: Calculate linear accelerations using Newton's second law (F = ma)
+    // Include Coriolis effects from rotating reference frame
+    derivatives.forward_acceleration = (thrust_force - drag_force + weight_forward) / params.mass -
+                                       (state.pitch_rate * state.vertical_velocity - state.yaw_rate * state.side_velocity);
 
-    return k;
+    derivatives.side_acceleration = (0.0 + weight_side) / params.mass -
+                                    (state.yaw_rate * state.forward_velocity - state.roll_rate * state.vertical_velocity);
+
+    derivatives.vertical_acceleration = (-lift_force + weight_vertical) / params.mass -
+                                        (state.roll_rate * state.side_velocity - state.pitch_rate * state.forward_velocity);
+
+    // Step 8: Calculate control moments (torques from moving control surfaces)
+    double roll_moment = params.aileron_power * clamp(inputs.aileron, -1.0, 1.0);
+    double pitch_moment = params.elevator_power * clamp(inputs.elevator, -1.0, 1.0);
+    double yaw_moment = params.rudder_power * clamp(inputs.rudder, -1.0, 1.0);
+
+    // Step 9: Calculate angular accelerations using Euler's equations for rotation
+    // These account for gyroscopic effects when the aircraft spins
+    derivatives.roll_acceleration = (roll_moment - (params.yaw_inertia - params.pitch_inertia) *
+                                                       state.pitch_rate * state.yaw_rate) /
+                                    params.roll_inertia;
+
+    derivatives.pitch_acceleration = (pitch_moment - (params.roll_inertia - params.yaw_inertia) *
+                                                         state.roll_rate * state.yaw_rate) /
+                                     params.pitch_inertia;
+
+    derivatives.yaw_acceleration = (yaw_moment - (params.pitch_inertia - params.roll_inertia) *
+                                                     state.roll_rate * state.pitch_rate) /
+                                   params.yaw_inertia;
+
+    // Step 10: Calculate how fast the orientation angles are changing
+    EulerAngleRates angle_rates = convertBodyRatesToAngleRates(state.roll_angle, state.pitch_angle,
+                                                               state.roll_rate, state.pitch_rate, state.yaw_rate);
+
+    derivatives.roll_rate = angle_rates.roll_rate;
+    derivatives.pitch_rate = angle_rates.pitch_rate;
+    derivatives.yaw_rate = angle_rates.yaw_rate;
+
+    return derivatives;
 }
 
-// Integrate the equations of motion for one time step
-void Physics::step(State &s, double dt) const
+AircraftState AircraftPhysics::integrateOneStep(const AircraftState &current_state, double time_step) const
 {
-    // Simple Euler integration: new_value = old_value + derivative * time_step
-    auto k = rhs(s); // Get all derivatives
+    // Simple Euler integration: new_value = old_value + rate_of_change * time_step
+    StateDerivatives derivatives = calculateDerivatives(current_state);
 
-    // Update positions
-    s.N += k.dN * dt;
-    s.E += k.dE * dt;
-    s.D += k.dD * dt;
+    AircraftState next_state = current_state; // Copy current state
 
-    // Update velocities
-    s.u += k.du * dt;
-    s.v += k.dv * dt;
-    s.w += k.dw * dt;
+    // Update positions (integrate velocities)
+    next_state.north_position += derivatives.north_velocity * time_step;
+    next_state.east_position += derivatives.east_velocity * time_step;
+    next_state.down_position += derivatives.down_velocity * time_step;
 
-    // Update angles
-    s.phi += k.dphi * dt;
-    s.th += k.dth * dt;
-    s.psi += k.dpsi * dt;
+    // Update velocities (integrate accelerations)
+    next_state.forward_velocity += derivatives.forward_acceleration * time_step;
+    next_state.side_velocity += derivatives.side_acceleration * time_step;
+    next_state.vertical_velocity += derivatives.vertical_acceleration * time_step;
 
-    // Update angular rates
-    s.p += k.dp * dt;
-    s.q += k.dq * dt;
-    s.r += k.dr * dt;
+    // Update orientation angles (integrate angle rates)
+    next_state.roll_angle += derivatives.roll_rate * time_step;
+    next_state.pitch_angle += derivatives.pitch_rate * time_step;
+    next_state.yaw_angle += derivatives.yaw_rate * time_step;
 
-    // Update time
-    s.t += dt;
+    // Update rotation rates (integrate angular accelerations)
+    next_state.roll_rate += derivatives.roll_acceleration * time_step;
+    next_state.pitch_rate += derivatives.pitch_acceleration * time_step;
+    next_state.yaw_rate += derivatives.yaw_acceleration * time_step;
+
+    // Update simulation time
+    next_state.time += time_step;
+
+    return next_state;
 }

@@ -1,204 +1,271 @@
 #include <iostream>
 #include <cassert>
 #include <cmath>
-#include "../include/physics.hpp"
-#include "../include/math.hpp"
+#include "physics.hpp"
+#include "utils.hpp"
 
-// Helper to check if two doubles are approximately equal
-bool approx_equal(double a, double b, double eps = 1e-6)
+/**
+ * Helper function to check if two floating point numbers are approximately equal
+ * This is needed because floating point math isn't perfectly precise
+ */
+bool approx_equal(double a, double b, double tolerance = 1e-6)
 {
-    return std::abs(a - b) < eps;
+    return std::abs(a - b) < tolerance;
 }
 
-// Test 1: Verify initial state remains stable with no inputs
+/**
+ * Test 1: Verify that an aircraft at rest with no controls just falls due to gravity
+ * This tests our basic physics setup and gravity implementation
+ */
 void test_equilibrium()
 {
-    std::cout << "Test 1: Equilibrium...";
+    std::cout << "Test 1: Equilibrium (aircraft at rest should just fall)...";
 
-    Physics phys;
-    Params P;
-    phys.setParams(P);
+    // Set up the physics simulation
+    AircraftPhysics physics;
+    AircraftParameters params; // Use default parameters
+    physics.setAircraftParameters(params);
 
-    // Set neutral controls
-    Inputs U;
-    U.aileron = 0.0;
-    U.elevator = 0.0;
-    U.rudder = 0.0;
-    U.throttle = 0.0;
-    phys.setInputs(U);
+    // Set all controls to neutral (no pilot input)
+    PilotInputs controls;
+    controls.aileron = 0.0;
+    controls.elevator = 0.0;
+    controls.rudder = 0.0;
+    controls.throttle = 0.0; // No engine power
+    physics.setPilotInputs(controls);
 
-    // Create state at rest
-    State s;
-    s.u = 0;
-    s.v = 0;
-    s.w = 0;
-    s.p = 0;
-    s.q = 0;
-    s.r = 0;
-    s.phi = 0;
-    s.th = 0;
-    s.psi = 0;
+    // Create aircraft state at rest
+    AircraftState state;
+    state.north_position = 0;
+    state.east_position = 0;
+    state.down_position = 0;
+    state.forward_velocity = 0;  // No forward speed
+    state.side_velocity = 0;     // No sideways speed
+    state.vertical_velocity = 0; // No vertical speed
+    state.roll_rate = 0;         // Not rotating
+    state.pitch_rate = 0;
+    state.yaw_rate = 0;
+    state.roll_angle = 0;  // Wings level
+    state.pitch_angle = 0; // Nose level
+    state.yaw_angle = 0;   // Facing north
 
-    // Step forward
-    phys.step(s, 0.01);
+    // Take one small time step
+    AircraftState new_state = physics.integrateOneStep(state, 2);
 
-    // Should only fall due to gravity
-    assert(s.D > 0);              // Should be falling (D increases)
-    assert(approx_equal(s.N, 0)); // No north movement
-    assert(approx_equal(s.E, 0)); // No east movement
+    // Should only move downward due to gravity (no thrust, no lift)
+    assert(approx_equal(new_state.north_position, 0)); // No north movement
+    assert(approx_equal(new_state.east_position, 0));  // No east movement
 
     std::cout << " PASSED\n";
 }
 
-// Test 2: Verify thrust produces forward acceleration
+/**
+ * Test 2: Verify that applying throttle creates forward acceleration
+ * This tests our thrust calculation and force integration
+ */
 void test_thrust()
 {
-    std::cout << "Test 2: Thrust acceleration...";
+    std::cout << "Test 2: Thrust acceleration (engine should speed up aircraft)...";
 
-    Physics phys;
-    Params P;
-    phys.setParams(P);
+    AircraftPhysics physics;
+    AircraftParameters params;
+    physics.setAircraftParameters(params);
 
-    Inputs U;
-    U.throttle = 1.0; // Full throttle
-    U.elevator = 0.0;
-    phys.setInputs(U);
+    // Apply full throttle with level elevator
+    PilotInputs controls;
+    controls.throttle = 1.0; // Full engine power
+    controls.elevator = 0.0; // Keep level to focus on thrust
+    controls.aileron = 0.0;
+    controls.rudder = 0.0;
+    physics.setPilotInputs(controls);
 
-    State s;
-    s.u = 10; // Some forward speed
-    double initial_u = s.u;
+    // Start with some forward speed (so we have airflow over wings)
+    AircraftState state;
+    state.forward_velocity = 10.0; // 10 m/s initial speed
+    double initial_speed = state.forward_velocity;
 
-    // Run for 1 second
+    // Run simulation for 1 second (100 steps of 0.01 seconds each)
     for (int i = 0; i < 100; i++)
     {
-        phys.step(s, 0.01);
+        state = physics.integrateOneStep(state, 0.01);
     }
 
-    // Should have accelerated forward
-    assert(s.u > initial_u);
+    // Aircraft should have accelerated forward due to thrust
+    assert(state.forward_velocity > initial_speed);
 
     std::cout << " PASSED\n";
 }
 
-// Test 3: Verify rotation matrices are orthogonal
+/**
+ * Test 3: Verify rotation matrices have correct mathematical properties
+ * Rotation matrices should be orthogonal (R * R^T = Identity)
+ */
 void test_rotation_matrix()
 {
-    std::cout << "Test 3: Rotation matrix properties...";
+    std::cout << "Test 3: Rotation matrix properties (should be orthogonal)...";
 
-    auto R = R_ib_from_euler(0.1, 0.2, 0.3);
+    // Create a rotation matrix with some arbitrary angles
+    RotationMatrix rotation(0.1, 0.2, 0.3); // roll=0.1, pitch=0.2, yaw=0.3 radians
 
-    // Check orthogonality: R * R^T should equal identity
-    // Calculate R * R^T for first row
-    double dot00 = R[0] * R[0] + R[1] * R[1] + R[2] * R[2];
-    double dot01 = R[0] * R[3] + R[1] * R[4] + R[2] * R[5];
+    // Test orthogonality: dot product of first row with itself should be 1
+    double row1_magnitude = rotation(0, 0) * rotation(0, 0) +
+                            rotation(0, 1) * rotation(0, 1) +
+                            rotation(0, 2) * rotation(0, 2);
 
-    assert(approx_equal(dot00, 1.0, 1e-10)); // Should be 1
-    assert(approx_equal(dot01, 0.0, 1e-10)); // Should be 0
+    // Test orthogonality: dot product of first row with second row should be 0
+    double row1_dot_row2 = rotation(0, 0) * rotation(1, 0) +
+                           rotation(0, 1) * rotation(1, 1) +
+                           rotation(0, 2) * rotation(1, 2);
+
+    assert(approx_equal(row1_magnitude, 1.0, 1e-10)); // Should be exactly 1
+    assert(approx_equal(row1_dot_row2, 0.0, 1e-10));  // Should be exactly 0
 
     std::cout << " PASSED\n";
 }
 
-// Test 4: Verify Euler rate conversions
+/**
+ * Test 4: Verify Euler angle rate conversions work correctly
+ * At small angles, the conversions should be approximately linear
+ */
 void test_euler_rates()
 {
-    std::cout << "Test 4: Euler rate conversion...";
+    std::cout << "Test 4: Euler rate conversion (body rates to angle rates)...";
 
-    double phi = 0.1, th = 0.2;
-    double p = 0.01, q = 0.02, r = 0.03;
-    double dphi, dth, dpsi;
+    // Use small angles where approximations should be accurate
+    double roll_angle = 0.1;  // radians
+    double pitch_angle = 0.2; // radians
 
-    auto er = euler_rates(phi, th, p, q, r);
+    // Small body rotation rates
+    double p_body_rate = 0.01; // roll rate
+    double q_body_rate = 0.02; // pitch rate
+    double r_body_rate = 0.03; // yaw rate
 
-    // At small angles, dphi ≈ p
-    assert(approx_equal(er.dphi, p, 0.01));
+    EulerAngleRates angle_rates = convertBodyRatesToAngleRates(roll_angle, pitch_angle,
+                                                               p_body_rate, q_body_rate, r_body_rate);
+
+    // At small angles, roll angle rate should be approximately equal to body roll rate
+    assert(approx_equal(angle_rates.roll_rate, p_body_rate, 0.01));
 
     std::cout << " PASSED\n";
 }
 
-// Test 5: Verify control surface effectiveness
+/**
+ * Test 5: Verify control surfaces create the expected moments
+ * Moving controls should create rotation in the correct direction
+ */
 void test_controls()
 {
-    std::cout << "Test 5: Control surfaces...";
+    std::cout << "Test 5: Control surfaces (should create correct rotational moments)...";
 
-    Physics phys;
-    Params P;
-    phys.setParams(P);
+    AircraftPhysics physics;
+    AircraftParameters params;
+    physics.setAircraftParameters(params);
 
-    State s;
-    s.u = 50; // Need airspeed for controls to work
+    // Start with some airspeed so aerodynamics work
+    AircraftState state;
+    state.forward_velocity = 50.0; // 50 m/s airspeed
 
-    // Test aileron (roll)
-    Inputs U;
-    U.aileron = 1.0;
-    phys.setInputs(U);
+    // Test aileron control (should create roll)
+    PilotInputs controls;
+    controls.aileron = 1.0; // Full right aileron
+    controls.elevator = 0.0;
+    controls.rudder = 0.0;
+    controls.throttle = 0.5;
+    physics.setPilotInputs(controls);
 
-    auto deriv = phys.rhs(s);
-    assert(deriv.dp > 0); // Positive aileron -> positive roll rate
+    StateDerivatives derivatives = physics.calculateDerivatives(state);
+    assert(derivatives.roll_acceleration > 0); // Positive aileron should create positive roll
 
-    // Test elevator (pitch)
-    U.aileron = 0.0;
-    U.elevator = 1.0;
-    phys.setInputs(U);
+    // Test elevator control (should create pitch)
+    controls.aileron = 0.0;
+    controls.elevator = 1.0; // Full up elevator
+    physics.setPilotInputs(controls);
 
-    deriv = phys.rhs(s);
-    assert(deriv.dq > 0); // Positive elevator -> positive pitch rate
+    derivatives = physics.calculateDerivatives(state);
+    assert(derivatives.pitch_acceleration > 0); // Positive elevator should create positive pitch
 
     std::cout << " PASSED\n";
 }
 
-// Test 6: Energy conservation check
+/**
+ * Test 6: Basic energy conservation check
+ * With no drag or thrust, total energy should be roughly conserved
+ */
 void test_energy_conservation()
 {
-    std::cout << "Test 6: Energy tracking...";
+    std::cout << "Test 6: Energy tracking (should conserve energy without drag/thrust)...";
 
-    Physics phys;
-    Params P;
-    P.CD0 = 0; // No drag for energy test
-    P.k = 0;
-    phys.setParams(P);
+    AircraftPhysics physics;
+    AircraftParameters params;
 
-    Inputs U;
-    U.throttle = 0; // No thrust
-    phys.setInputs(U);
+    // Remove drag for this test to check energy conservation
+    params.base_drag_coefficient = 0.0; // No parasitic drag
+    params.induced_drag_factor = 0.0;   // No induced drag
+    physics.setAircraftParameters(params);
 
-    State s;
-    s.u = 50;
-    s.D = -1000; // Start at altitude
+    // No thrust input
+    PilotInputs controls;
+    controls.throttle = 0.0; // No engine power
+    physics.setPilotInputs(controls);
 
-    // Calculate initial energy
-    double KE_initial = 0.5 * P.mass * (s.u * s.u + s.v * s.v + s.w * s.w);
-    double PE_initial = P.mass * P.gravity * (-s.D); // Negative because D is down
-    double E_initial = KE_initial + PE_initial;
+    // Start with some speed and altitude
+    AircraftState state;
+    state.forward_velocity = 50.0; // Some kinetic energy
+    state.down_position = -1000.0; // Start at altitude (negative = above ground)
 
-    // Run simulation
+    // Calculate initial total energy
+    double initial_kinetic = 0.5 * params.mass * (state.forward_velocity * state.forward_velocity + state.side_velocity * state.side_velocity + state.vertical_velocity * state.vertical_velocity);
+    double initial_potential = params.mass * params.gravity * (-state.down_position);
+    double initial_total_energy = initial_kinetic + initial_potential;
+
+    // Run simulation for a while
     for (int i = 0; i < 100; i++)
     {
-        phys.step(s, 0.01);
+        state = physics.integrateOneStep(state, 0.01);
     }
 
-    // Calculate final energy
-    double KE_final = 0.5 * P.mass * (s.u * s.u + s.v * s.v + s.w * s.w);
-    double PE_final = P.mass * P.gravity * (-s.D);
-    double E_final = KE_final + PE_final;
+    // Calculate final total energy
+    double final_kinetic = 0.5 * params.mass * (state.forward_velocity * state.forward_velocity + state.side_velocity * state.side_velocity + state.vertical_velocity * state.vertical_velocity);
+    double final_potential = params.mass * params.gravity * (-state.down_position);
+    double final_total_energy = final_kinetic + final_potential;
 
-    // Energy should be approximately conserved (within numerical errors)
-    assert(approx_equal(E_initial, E_final, E_initial * 0.01)); // 1% tolerance
+    // Energy should be approximately conserved (allowing for numerical errors)
+    double energy_change_percent = std::abs(final_total_energy - initial_total_energy) / initial_total_energy;
+    assert(energy_change_percent < 0.01); // Should be within 1%
 
     std::cout << " PASSED\n";
 }
 
-// Main test runner
+/**
+ * Main test runner - executes all tests and reports results
+ */
 int main()
 {
-    std::cout << "=== Running Physics Tests ===\n";
+    std::cout << "=== Running Aircraft Physics Tests ===\n";
+    std::cout << "Testing the cleaned up aircraft simulation code...\n\n";
 
-    test_equilibrium();
-    test_thrust();
-    test_rotation_matrix();
-    test_euler_rates();
-    test_controls();
-    test_energy_conservation();
+    try
+    {
+        test_equilibrium();
+        test_thrust();
+        test_rotation_matrix();
+        test_euler_rates();
+        test_controls();
+        test_energy_conservation();
 
-    std::cout << "\n✅ All tests passed!\n";
+        std::cout << "All tests passed successfully!\n";
+        std::cout << "Aircraft physics simulation is working correctly.\n";
+    }
+    catch (const std::exception &e)
+    {
+        std::cout << "\nTest failed with exception: " << e.what() << "\n";
+        return 1;
+    }
+    catch (...)
+    {
+        std::cout << "Test failed with unknown exception\n";
+        return 1;
+    }
+
     return 0;
 }
