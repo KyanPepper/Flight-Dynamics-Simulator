@@ -47,7 +47,9 @@
     "typeinfo": "cpp",
     "unordered_map": "cpp",
     "variant": "cpp",
-    "algorithm": "cpp"
+    "algorithm": "cpp",
+    "charconv": "cpp",
+    "forward_list": "cpp"
   },
   "editor.formatOnSave": true,
   "C_Cpp.errorSquiggles": "disabled"
