@@ -2,10 +2,15 @@
 #include <QFontMetrics>
 #include <QPainterPath>
 #include <algorithm>
+#include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 HorizonWidget::HorizonWidget(QWidget *parent) : QWidget(parent)
 {
-    setMinimumSize(1200, 800); // Larger window for more instruments
+    setMinimumSize(1200, 800);
     setStyleSheet("background-color: #1a1a1a;");
 }
 
@@ -40,62 +45,45 @@ void HorizonWidget::paintEvent(QPaintEvent *)
 
     int w = width(), h = height();
 
-    // Main layout grid
     int centerX = w / 2;
     int centerY = h / 2;
     int mainSize = std::min(w, h) * 0.35;
     int smallSize = mainSize * 0.5;
     int tinySize = mainSize * 0.3;
 
-    // === Center: Artificial Horizon (Primary Flight Display) ===
     QRect horizonRect(centerX - mainSize / 2, centerY - mainSize / 2, mainSize, mainSize);
     drawArtificialHorizon(p, horizonRect);
 
-    // === Left Column ===
-    // Airspeed Indicator
     QRect airspeedRect(50, 50, smallSize, smallSize);
     drawAirspeedIndicator(p, airspeedRect);
 
-    // Vertical Speed Indicator
     QRect vsiRect(50, 70 + smallSize, smallSize, smallSize);
     drawVerticalSpeedIndicator(p, vsiRect);
 
-    // G-Meter
     QRect gmeterRect(50, 90 + smallSize * 2, smallSize, tinySize);
     drawGMeter(p, gmeterRect);
 
-    // === Right Column ===
-    // Altimeter
     QRect altimeterRect(w - 50 - smallSize, 50, smallSize, smallSize);
     drawAltimeter(p, altimeterRect);
 
-    // Heading Indicator
     QRect headingRect(w - 50 - smallSize, 70 + smallSize, smallSize, smallSize);
     drawHeadingIndicator(p, headingRect);
 
-    // Turn Coordinator
     QRect turnRect(w - 50 - smallSize, 90 + smallSize * 2, smallSize, tinySize);
     drawTurnCoordinator(p, turnRect);
 
-    // === Bottom Row ===
-    // Control Positions
     QRect controlsRect(centerX - 250, h - 150, 200, 120);
     drawControlPositions(p, controlsRect);
 
-    // Throttle Gauge
     QRect throttleRect(centerX - 25, h - 150, 50, 120);
     drawThrottleGauge(p, throttleRect);
 
-    // Angle Indicators (AoA, Sideslip)
     QRect anglesRect(centerX + 50, h - 150, 200, 120);
     drawAngleIndicators(p, anglesRect);
 
-    // === Top Row ===
-    // Mini Map
     QRect mapRect(centerX - 150, 10, 300, 150);
     drawMiniMap(p, mapRect);
 
-    // Data Panel
     QRect dataRect(10, h - 200, 300, 180);
     drawDataPanel(p, dataRect);
 }
@@ -103,66 +91,48 @@ void HorizonWidget::paintEvent(QPaintEvent *)
 void HorizonWidget::drawArtificialHorizon(QPainter &p, const QRect &rect)
 {
     p.save();
-
-    // Background
     p.fillRect(rect, QColor(30, 30, 35));
-
-    // Clip to instrument area
     p.setClipRect(rect);
 
-    // Center point
     QPoint center = rect.center();
     p.translate(center);
-
-    // Apply roll rotation
     p.rotate(-animated_roll_ * 180.0 / M_PI);
 
-    // Apply pitch translation
-    double pixelsPerDegree = rect.height() / 60.0; // 60 degrees visible
+    double pixelsPerDegree = rect.height() / 60.0;
     double pitchOffset = animated_pitch_ * 180.0 / M_PI * pixelsPerDegree;
     p.translate(0, pitchOffset);
 
-    // Sky gradient
     QLinearGradient skyGradient(0, -rect.height(), 0, 0);
     skyGradient.setColorAt(0, QColor(0, 50, 120));
     skyGradient.setColorAt(0.5, QColor(70, 130, 180));
     skyGradient.setColorAt(1, QColor(135, 206, 235));
     p.fillRect(-rect.width(), -rect.height(), rect.width() * 2, rect.height(), skyGradient);
 
-    // Ground gradient
     QLinearGradient groundGradient(0, 0, 0, rect.height());
     groundGradient.setColorAt(0, QColor(101, 67, 33));
     groundGradient.setColorAt(0.5, QColor(139, 90, 43));
     groundGradient.setColorAt(1, QColor(160, 82, 45));
     p.fillRect(-rect.width(), 0, rect.width() * 2, rect.height(), groundGradient);
 
-    // Horizon line
     QPen horizonPen(Qt::white, 3);
     p.setPen(horizonPen);
     p.drawLine(-rect.width() / 2, 0, rect.width() / 2, 0);
 
-    // Pitch ladder
     p.setFont(QFont("Arial", 10));
     for (int angle = -90; angle <= 90; angle += 10)
     {
         if (angle == 0)
-            continue; // Skip horizon line
-
+            continue;
         int y = -angle * pixelsPerDegree;
         int lineLength = (angle % 30 == 0) ? 80 : 40;
 
         if (angle > 0)
-        {
             p.setPen(QPen(Qt::white, 2));
-        }
         else
-        {
             p.setPen(QPen(Qt::white, 1, Qt::DashLine));
-        }
 
         p.drawLine(-lineLength / 2, y, lineLength / 2, y);
 
-        // Angle labels
         if (angle % 20 == 0)
         {
             p.setPen(Qt::white);
@@ -174,31 +144,24 @@ void HorizonWidget::drawArtificialHorizon(QPainter &p, const QRect &rect)
 
     p.restore();
 
-    // Fixed aircraft symbol
     p.save();
     p.translate(center);
     QPen aircraftPen(Qt::yellow, 4);
     p.setPen(aircraftPen);
-    p.drawLine(-60, 0, -20, 0); // Left wing
-    p.drawLine(20, 0, 60, 0);   // Right wing
-    p.drawLine(0, -10, 0, 10);  // Body
-
-    // Center dot
+    p.drawLine(-60, 0, -20, 0);
+    p.drawLine(20, 0, 60, 0);
+    p.drawLine(0, -10, 0, 10);
     p.setBrush(Qt::yellow);
     p.drawEllipse(QPoint(0, 0), 4, 4);
     p.restore();
 
-    // Roll scale at top
     p.save();
     p.translate(center.x(), rect.top() + 30);
-
-    // Roll arc
     QPen rollPen(Qt::white, 2);
     p.setPen(rollPen);
     int rollRadius = rect.width() * 0.35;
     p.drawArc(-rollRadius, -rollRadius, rollRadius * 2, rollRadius * 2, 30 * 16, 120 * 16);
 
-    // Roll marks
     for (int angle = -60; angle <= 60; angle += 30)
     {
         p.save();
@@ -207,7 +170,6 @@ void HorizonWidget::drawArtificialHorizon(QPainter &p, const QRect &rect)
         p.restore();
     }
 
-    // Roll pointer
     p.save();
     p.rotate(-animated_roll_ * 180.0 / M_PI);
     QPen pointerPen(Qt::yellow, 3);
@@ -215,20 +177,15 @@ void HorizonWidget::drawArtificialHorizon(QPainter &p, const QRect &rect)
     p.drawLine(0, -rollRadius + 15, -8, -rollRadius + 25);
     p.drawLine(0, -rollRadius + 15, 8, -rollRadius + 25);
     p.restore();
-
     p.restore();
 }
 
 void HorizonWidget::drawAirspeedIndicator(QPainter &p, const QRect &rect)
 {
-    drawCircularGauge(p, rect,
-                      ui_.total_velocity * 1.94384, // Convert m/s to knots
-                      0, 200,
-                      "AIRSPEED", "KTS",
-                      QColor(0, 255, 0));
+    drawCircularGauge(p, rect, ui_.total_velocity * 1.94384, 0, 200,
+                      "AIRSPEED", "KTS", QColor(0, 255, 0));
 
-    // Add speed trend indicator
-    if (speed_history_.size() > 2)
+    if (speed_history_.size() > 10)
     {
         double trend = speed_history_.back() - speed_history_[speed_history_.size() - 10];
         p.save();
@@ -248,13 +205,9 @@ void HorizonWidget::drawAirspeedIndicator(QPainter &p, const QRect &rect)
 
 void HorizonWidget::drawAltimeter(QPainter &p, const QRect &rect)
 {
-    drawCircularGauge(p, rect,
-                      ui_.altitude * 3.28084, // Convert meters to feet (altitude is positive)
-                      0, 10000,
-                      "ALTITUDE", "FT",
-                      QColor(0, 150, 255));
+    drawCircularGauge(p, rect, ui_.altitude * 3.28084, 0, 10000,
+                      "ALTITUDE", "FT", QColor(0, 150, 255));
 
-    // Add altitude trend
     if (altitude_history_.size() > 10)
     {
         p.save();
@@ -271,22 +224,16 @@ void HorizonWidget::drawAltimeter(QPainter &p, const QRect &rect)
 void HorizonWidget::drawHeadingIndicator(QPainter &p, const QRect &rect)
 {
     p.save();
-
-    // Background
     p.fillRect(rect, QColor(40, 40, 45));
     p.setPen(QPen(Qt::white, 2));
     p.drawRect(rect);
 
     QPoint center = rect.center();
     p.translate(center);
-
     int radius = rect.width() * 0.4;
 
-    // Compass rose
     p.save();
     p.rotate(-animated_heading_ * 180.0 / M_PI);
-
-    // Cardinal directions
     p.setFont(QFont("Arial", 12, QFont::Bold));
     p.setPen(Qt::white);
     p.drawText(-5, -radius + 20, "N");
@@ -294,7 +241,6 @@ void HorizonWidget::drawHeadingIndicator(QPainter &p, const QRect &rect)
     p.drawText(-5, radius - 10, "S");
     p.drawText(-radius + 10, 5, "W");
 
-    // Degree marks
     p.setFont(QFont("Arial", 9));
     for (int deg = 0; deg < 360; deg += 30)
     {
@@ -310,7 +256,6 @@ void HorizonWidget::drawHeadingIndicator(QPainter &p, const QRect &rect)
         p.restore();
     }
 
-    // Fine marks
     p.setPen(QPen(Qt::gray, 1));
     for (int deg = 0; deg < 360; deg += 10)
     {
@@ -322,17 +267,14 @@ void HorizonWidget::drawHeadingIndicator(QPainter &p, const QRect &rect)
             p.restore();
         }
     }
-
     p.restore();
 
-    // Fixed aircraft symbol
     QPen aircraftPen(Qt::yellow, 3);
     p.setPen(aircraftPen);
     p.drawLine(0, 0, 0, -radius * 0.7);
     p.drawLine(-10, 10, 0, 0);
     p.drawLine(10, 10, 0, 0);
 
-    // Heading readout
     p.setPen(Qt::white);
     p.setFont(QFont("Arial", 11, QFont::Bold));
     int heading = (int)(animated_heading_ * 180.0 / M_PI) % 360;
@@ -340,18 +282,13 @@ void HorizonWidget::drawHeadingIndicator(QPainter &p, const QRect &rect)
         heading += 360;
     QString hdgText = QString("HDG %1°").arg(heading, 3, 10, QChar('0'));
     p.drawText(-30, -radius - 20, hdgText);
-
     p.restore();
 }
 
 void HorizonWidget::drawVerticalSpeedIndicator(QPainter &p, const QRect &rect)
 {
-    double vsi_fpm = ui_.vertical_velocity * 196.85; // m/s to feet/min
-
-    drawCircularGauge(p, rect,
-                      vsi_fpm,
-                      -2000, 2000,
-                      "VSI", "FPM",
+    double vsi_fpm = ui_.vertical_velocity * 196.85;
+    drawCircularGauge(p, rect, vsi_fpm, -2000, 2000, "VSI", "FPM",
                       vsi_fpm > 100 ? QColor(0, 255, 0) : (vsi_fpm < -100 ? QColor(255, 0, 0) : QColor(255, 255, 0)));
 }
 
@@ -365,36 +302,31 @@ void HorizonWidget::drawTurnCoordinator(QPainter &p, const QRect &rect)
     QPoint center = rect.center();
     p.translate(center);
 
-    // Aircraft symbol that tilts
     double turnRate = ui_.yaw_rate;
-    p.rotate(-turnRate * 20); // Exaggerate for visibility
+    p.rotate(-turnRate * 20);
 
     QPen planePen(Qt::white, 2);
     p.setPen(planePen);
-    p.drawLine(-30, 0, 30, 0); // Wings
-    p.drawLine(0, -10, 0, 10); // Body
+    p.drawLine(-30, 0, 30, 0);
+    p.drawLine(0, -10, 0, 10);
 
     p.resetTransform();
     p.translate(center);
 
-    // Standard rate marks
     p.setPen(QPen(Qt::gray, 1));
     p.drawLine(-20, 20, -20, 25);
     p.drawLine(20, 20, 20, 25);
 
-    // Ball (slip indicator)
-    double slip = ui_.side_velocity * 2; // Exaggerate
+    double slip = ui_.side_velocity * 2;
     int ballX = std::max(-30.0, std::min(30.0, slip * 10));
 
     p.setPen(QPen(Qt::white, 2));
-    p.drawLine(-35, 35, 35, 35); // Tube
+    p.drawLine(-35, 35, 35, 35);
     p.setBrush(Qt::white);
-    p.drawEllipse(QPoint(ballX, 35), 5, 5); // Ball
+    p.drawEllipse(QPoint(ballX, 35), 5, 5);
 
-    // Labels
     p.setFont(QFont("Arial", 9));
     p.drawText(-50, -35, "TURN COORD");
-
     p.restore();
 }
 
@@ -404,37 +336,30 @@ void HorizonWidget::drawControlPositions(QPainter &p, const QRect &rect)
     p.fillRect(rect, QColor(40, 40, 45));
     p.setPen(QPen(Qt::white, 2));
     p.drawRect(rect);
-
     p.translate(rect.center());
 
-    // Title
     p.setFont(QFont("Arial", 10, QFont::Bold));
     p.setPen(Qt::white);
     p.drawText(-40, -50, "CONTROLS");
 
-    // Stick position indicator (aileron/elevator)
     int boxSize = 60;
     p.drawRect(-boxSize / 2, -boxSize / 2 + 10, boxSize, boxSize);
 
-    // Crosshair
     p.setPen(QPen(Qt::gray, 1, Qt::DashLine));
     p.drawLine(-boxSize / 2, 10, boxSize / 2, 10);
     p.drawLine(0, -boxSize / 2 + 10, 0, boxSize / 2 + 10);
 
-    // Stick position
     int stickX = ui_.aileron * boxSize / 2;
     int stickY = -ui_.elevator * boxSize / 2;
     p.setBrush(QColor(255, 100, 0));
     p.setPen(QPen(QColor(255, 100, 0), 2));
     p.drawEllipse(QPoint(stickX, stickY + 10), 5, 5);
 
-    // Rudder bar
     p.setPen(QPen(Qt::white, 2));
     p.drawRect(-40, 50, 80, 10);
     int rudderPos = ui_.rudder * 40;
     p.fillRect(rudderPos - 5, 50, 10, 10, QColor(255, 100, 0));
 
-    // Labels
     p.setFont(QFont("Arial", 8));
     p.setPen(Qt::gray);
     p.drawText(-50, -20, "AIL");
@@ -443,7 +368,6 @@ void HorizonWidget::drawControlPositions(QPainter &p, const QRect &rect)
     p.drawText(35, 0, QString::number(ui_.elevator, 'f', 2));
     p.drawText(-50, 48, "RUD");
     p.drawText(35, 48, QString::number(ui_.rudder, 'f', 2));
-
     p.restore();
 }
 
@@ -454,15 +378,12 @@ void HorizonWidget::drawThrottleGauge(QPainter &p, const QRect &rect)
     p.setPen(QPen(Qt::white, 2));
     p.drawRect(rect);
 
-    // Throttle bar
     int barHeight = rect.height() - 40;
     int barTop = rect.top() + 30;
     int throttleHeight = ui_.throttle * barHeight;
 
-    // Background
     p.fillRect(rect.left() + 10, barTop, 30, barHeight, QColor(20, 20, 20));
 
-    // Throttle level
     QLinearGradient throttleGrad(0, 0, 0, barHeight);
     throttleGrad.setColorAt(0, Qt::red);
     throttleGrad.setColorAt(0.5, Qt::yellow);
@@ -470,7 +391,6 @@ void HorizonWidget::drawThrottleGauge(QPainter &p, const QRect &rect)
     p.fillRect(rect.left() + 10, barTop + barHeight - throttleHeight,
                30, throttleHeight, throttleGrad);
 
-    // Percentage marks
     p.setPen(Qt::white);
     p.setFont(QFont("Arial", 8));
     for (int pct = 0; pct <= 100; pct += 25)
@@ -480,14 +400,10 @@ void HorizonWidget::drawThrottleGauge(QPainter &p, const QRect &rect)
         p.drawText(rect.left() + 42, y + 3, QString::number(pct));
     }
 
-    // Label
     p.setFont(QFont("Arial", 9, QFont::Bold));
     p.drawText(rect.left() + 5, rect.top() + 15, "THR");
-
-    // Current value
     p.drawText(rect.left() + 5, rect.bottom() - 5,
                QString("%1%").arg((int)(ui_.throttle * 100)));
-
     p.restore();
 }
 
@@ -497,15 +413,12 @@ void HorizonWidget::drawAngleIndicators(QPainter &p, const QRect &rect)
     p.fillRect(rect, QColor(40, 40, 45));
     p.setPen(QPen(Qt::white, 2));
     p.drawRect(rect);
-
     p.translate(rect.left() + rect.width() / 2, rect.top() + rect.height() / 2);
 
-    // Title
     p.setFont(QFont("Arial", 10, QFont::Bold));
     p.setPen(Qt::white);
     p.drawText(-40, -50, "ANGLES");
 
-    // Angle of Attack indicator
     p.setFont(QFont("Arial", 9));
     p.drawText(-80, -20, "AoA:");
 
@@ -515,12 +428,10 @@ void HorizonWidget::drawAngleIndicators(QPainter &p, const QRect &rect)
     p.setPen(aoaColor);
     p.drawText(20, -20, QString("%1°").arg(aoa_deg, 0, 'f', 1));
 
-    // AoA bar graph
     p.fillRect(-30, -10, 60, 8, QColor(20, 20, 20));
     int aoaBar = std::max(-30, std::min(30, (int)(aoa_deg * 2)));
     p.fillRect(0, -10, aoaBar, 8, aoaColor);
 
-    // Sideslip indicator
     p.setPen(Qt::white);
     p.drawText(-80, 10, "Slip:");
 
@@ -529,19 +440,16 @@ void HorizonWidget::drawAngleIndicators(QPainter &p, const QRect &rect)
     p.setPen(slipColor);
     p.drawText(20, 10, QString("%1°").arg(slip_deg, 0, 'f', 1));
 
-    // Slip bar graph
     p.fillRect(-30, 20, 60, 8, QColor(20, 20, 20));
     int slipBar = std::max(-30, std::min(30, (int)(slip_deg * 2)));
     p.fillRect(0, 20, slipBar, 8, slipColor);
 
-    // G-force readout
     p.setPen(Qt::white);
     p.drawText(-80, 40, "G:");
     QColor gColor = (ui_.g_force > 4 || ui_.g_force < -1) ? Qt::red : (ui_.g_force > 2 || ui_.g_force < 0) ? Qt::yellow
                                                                                                            : Qt::green;
     p.setPen(gColor);
     p.drawText(20, 40, QString("%1g").arg(ui_.g_force, 0, 'f', 2));
-
     p.restore();
 }
 
@@ -552,14 +460,12 @@ void HorizonWidget::drawMiniMap(QPainter &p, const QRect &rect)
     p.setPen(QPen(QColor(100, 100, 100), 1));
     p.drawRect(rect);
 
-    // Title
     p.setFont(QFont("Arial", 10, QFont::Bold));
     p.setPen(Qt::white);
     p.drawText(rect.left() + 5, rect.top() + 15, "FLIGHT PATH");
 
     if (flight_path_.size() > 1)
     {
-        // Find bounds
         double minX = flight_path_[0].x(), maxX = minX;
         double minY = flight_path_[0].y(), maxY = minY;
 
@@ -571,11 +477,9 @@ void HorizonWidget::drawMiniMap(QPainter &p, const QRect &rect)
             maxY = std::max(maxY, pt.y());
         }
 
-        // Add padding
-        double rangeX = std::max(100.0, maxX - minX);
-        double rangeY = std::max(100.0, maxY - minY);
+        double rangeX = std::max(1.0, maxX - minX);
+        double rangeY = std::max(1.0, maxY - minY);
 
-        // Draw grid
         p.setPen(QPen(QColor(60, 60, 60), 1));
         for (int i = 0; i <= 4; i++)
         {
@@ -585,30 +489,6 @@ void HorizonWidget::drawMiniMap(QPainter &p, const QRect &rect)
             p.drawLine(x, rect.top() + 20, x, rect.bottom() - 10);
         }
 
-        // Draw flight path
-        QPainterPath path;
-        bool first = true;
-
-        for (size_t i = 0; i < flight_path_.size(); i++)
-        {
-            double x = (flight_path_[i].x() - minX) / rangeX;
-            double y = (flight_path_[i].y() - minY) / rangeY;
-
-            int px = rect.left() + 10 + x * (rect.width() - 20);
-            int py = rect.bottom() - 10 - y * (rect.height() - 30);
-
-            if (first)
-            {
-                path.moveTo(px, py);
-                first = false;
-            }
-            else
-            {
-                path.lineTo(px, py);
-            }
-        }
-
-        // Draw trail with gradient
         QColor trailColor(0, 255, 100);
         for (size_t i = 1; i < flight_path_.size(); i++)
         {
@@ -629,7 +509,6 @@ void HorizonWidget::drawMiniMap(QPainter &p, const QRect &rect)
             p.drawLine(px1, py1, px2, py2);
         }
 
-        // Current position (aircraft icon)
         if (!flight_path_.empty())
         {
             double x = (flight_path_.back().x() - minX) / rangeX;
@@ -647,13 +526,11 @@ void HorizonWidget::drawMiniMap(QPainter &p, const QRect &rect)
             p.restore();
         }
 
-        // Scale indicator
         p.setPen(Qt::white);
         p.setFont(QFont("Arial", 8));
         QString scale = QString("Scale: %1m").arg((int)rangeX);
         p.drawText(rect.right() - 80, rect.bottom() - 5, scale);
     }
-
     p.restore();
 }
 
@@ -663,25 +540,20 @@ void HorizonWidget::drawGMeter(QPainter &p, const QRect &rect)
     p.fillRect(rect, QColor(40, 40, 45));
     p.setPen(QPen(Qt::white, 2));
     p.drawRect(rect);
-
     p.translate(rect.center());
 
-    // Title
     p.setFont(QFont("Arial", 10, QFont::Bold));
     p.setPen(Qt::white);
     p.drawText(-20, -rect.height() / 2 + 15, "G-METER");
 
-    // G scale bar
     int barWidth = rect.width() - 40;
     int barHeight = 20;
     p.fillRect(-barWidth / 2, -10, barWidth, barHeight, QColor(20, 20, 20));
 
-    // Color zones
-    p.fillRect(-barWidth / 2, -10, barWidth / 6, barHeight, QColor(255, 0, 0, 100));     // Negative G
-    p.fillRect(-barWidth / 3, -10, barWidth * 2 / 3, barHeight, QColor(0, 255, 0, 100)); // Normal range
-    p.fillRect(barWidth / 3, -10, barWidth / 6, barHeight, QColor(255, 0, 0, 100));      // High G
+    p.fillRect(-barWidth / 2, -10, barWidth / 6, barHeight, QColor(255, 0, 0, 100));
+    p.fillRect(-barWidth / 3, -10, barWidth * 2 / 3, barHeight, QColor(0, 255, 0, 100));
+    p.fillRect(barWidth / 3, -10, barWidth / 6, barHeight, QColor(255, 0, 0, 100));
 
-    // Scale marks
     p.setPen(Qt::white);
     p.setFont(QFont("Arial", 7));
     for (int g = -2; g <= 6; g++)
@@ -691,7 +563,6 @@ void HorizonWidget::drawGMeter(QPainter &p, const QRect &rect)
         p.drawText(x - 5, 25, QString::number(g));
     }
 
-    // Current G pointer
     double gPos = std::max(-2.0, std::min(6.0, ui_.g_force));
     int pointerX = (gPos + 2) * barWidth / 8 - barWidth / 2;
 
@@ -704,10 +575,7 @@ void HorizonWidget::drawGMeter(QPainter &p, const QRect &rect)
     pointer << QPoint(pointerX, -15) << QPoint(pointerX - 5, -20) << QPoint(pointerX + 5, -20);
     p.drawPolygon(pointer);
 
-    // Digital readout
-    p.setFont(QFont("Arial", 12, QFont::Bold));
     p.drawText(-15, 45, QString("%1g").arg(ui_.g_force, 0, 'f', 2));
-
     p.restore();
 }
 
@@ -718,13 +586,10 @@ void HorizonWidget::drawDataPanel(QPainter &p, const QRect &rect)
     p.setPen(QPen(QColor(100, 100, 100), 1));
     p.drawRect(rect);
 
-    // Title
     p.setFont(QFont("Arial", 11, QFont::Bold));
     p.setPen(Qt::white);
     p.drawText(rect.left() + 10, rect.top() + 20, "FLIGHT DATA");
 
-    // Data rows
-    p.setFont(QFont("Courier", 9));
     int y = rect.top() + 40;
     int lineHeight = 15;
 
@@ -737,10 +602,9 @@ void HorizonWidget::drawDataPanel(QPainter &p, const QRect &rect)
         y += lineHeight;
     };
 
-    // Calculate some derived values
-    double tas = ui_.total_velocity * 1.94384;          // True airspeed in knots
-    double alt_ft = ui_.altitude * 3.28084;             // altitude is already positive
-    double climb_rate = ui_.vertical_velocity * 196.85; // ft/min
+    double tas = ui_.total_velocity * 1.94384;
+    double alt_ft = ui_.altitude * 3.28084;
+    double climb_rate = ui_.vertical_velocity * 196.85;
 
     drawDataRow("Time:", QString("%1 s").arg(ui_.time, 0, 'f', 1));
     drawDataRow("Airspeed:", QString("%1 kts").arg(tas, 0, 'f', 1),
@@ -773,7 +637,6 @@ void HorizonWidget::drawCircularGauge(QPainter &p, const QRect &rect,
 {
     p.save();
 
-    // Background
     p.fillRect(rect, QColor(40, 40, 45));
     p.setPen(QPen(Qt::white, 2));
     p.drawRect(rect);
@@ -783,15 +646,13 @@ void HorizonWidget::drawCircularGauge(QPainter &p, const QRect &rect,
 
     int radius = rect.width() * 0.35;
 
-    // Draw arc background
     p.setPen(QPen(QColor(60, 60, 60), 8));
     p.drawArc(-radius, -radius, radius * 2, radius * 2, 225 * 16, -270 * 16);
 
-    // Draw scale marks
     p.setPen(QPen(Qt::white, 2));
     for (int i = 0; i <= 10; i++)
     {
-        double angle = 225 - i * 27; // 270 degrees spread
+        double angle = 225 - i * 27;
         double rad = angle * M_PI / 180.0;
 
         int x1 = std::cos(rad) * (radius - 10);
@@ -801,7 +662,6 @@ void HorizonWidget::drawCircularGauge(QPainter &p, const QRect &rect,
 
         p.drawLine(x1, y1, x2, y2);
 
-        // Draw numbers at major marks
         if (i % 2 == 0)
         {
             p.setFont(QFont("Arial", 8));
@@ -813,15 +673,13 @@ void HorizonWidget::drawCircularGauge(QPainter &p, const QRect &rect,
         }
     }
 
-    // Draw colored arc for current value
     double ratio = std::max(0.0, std::min(1.0, (value - min) / (max - min)));
-    int arcLength = -ratio * 270 * 16; // Convert to 16ths of a degree
+    int arcLength = -ratio * 270 * 16;
 
     QPen arcPen(color, 6);
     p.setPen(arcPen);
     p.drawArc(-radius + 5, -radius + 5, (radius - 5) * 2, (radius - 5) * 2, 225 * 16, arcLength);
 
-    // Draw needle
     double needleAngle = 225 - ratio * 270;
     double needleRad = needleAngle * M_PI / 180.0;
 
@@ -830,22 +688,26 @@ void HorizonWidget::drawCircularGauge(QPainter &p, const QRect &rect,
                std::cos(needleRad) * (radius - 15),
                -std::sin(needleRad) * (radius - 15));
 
-    // Center cap
     p.setBrush(Qt::white);
     p.setPen(Qt::NoPen);
     p.drawEllipse(QPoint(0, 0), 5, 5);
 
-    // Label
     p.setPen(Qt::white);
     p.setFont(QFont("Arial", 10, QFont::Bold));
     p.drawText(-30, -radius - 10, label);
 
-    // Value display
     p.setFont(QFont("Arial", 12, QFont::Bold));
     p.setPen(color);
     QString valueText = QString("%1 %2").arg(value, 0, 'f', 0).arg(unit);
     QFontMetrics fm(p.font());
+
+    // FIXED: Use width() instead of horizontalAdvance() for Qt compatibility
+#if QT_VERSION >= QT_VERSION_CHECK(5, 11, 0)
     int textWidth = fm.horizontalAdvance(valueText);
+#else
+    int textWidth = fm.width(valueText);
+#endif
+
     p.drawText(-textWidth / 2, radius + 25, valueText);
 
     p.restore();

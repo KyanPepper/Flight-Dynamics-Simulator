@@ -31,6 +31,15 @@ struct AircraftParameters
     double rudder_power = 2000.0;   // Yaw control strength (N·m per unit input)
 
     double max_thrust = 4000.0; // Maximum engine thrust (N)
+
+    // ADDED: Aerodynamic damping coefficients (critical for stability)
+    double roll_damping = 2.0;  // Roll damping coefficient (INCREASED)
+    double pitch_damping = 3.0; // Pitch damping coefficient (INCREASED)
+    double yaw_damping = 1.5;   // Yaw damping coefficient (INCREASED)
+
+    // Stall characteristics
+    double stall_angle = 0.26;         // ~15 degrees stall AoA (radians)
+    double max_lift_coefficient = 1.4; // Maximum CL before stall
 };
 
 /**
