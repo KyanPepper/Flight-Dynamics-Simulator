@@ -477,8 +477,9 @@ void HorizonWidget::drawMiniMap(QPainter &p, const QRect &rect)
             maxY = std::max(maxY, pt.y());
         }
 
-        double rangeX = std::max(1.0, maxX - minX);
-        double rangeY = std::max(1.0, maxY - minY);
+        // Add padding - MUCH LARGER SCALE
+        double rangeX = std::max(1000.0, maxX - minX); // Minimum 1000m range
+        double rangeY = std::max(1000.0, maxY - minY); // Minimum 1000m range
 
         p.setPen(QPen(QColor(60, 60, 60), 1));
         for (int i = 0; i <= 4; i++)

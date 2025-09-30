@@ -17,9 +17,11 @@ add_executable(flightSim
   src/main_qt.cpp
   src/physics.cpp
   src/horizon_widget.cpp
+  src/control_panel.cpp
   include/horizon_widget.h  
   include/physics.hpp
   include/ring.hpp
+  include/control_panel.h
 )
 
 target_include_directories(flightSim PRIVATE include)

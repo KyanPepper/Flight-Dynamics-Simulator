@@ -10,6 +10,7 @@
 #include "physics.hpp"
 #include "ring.hpp"
 #include "horizon_widget.h"
+#include "control_panel.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
